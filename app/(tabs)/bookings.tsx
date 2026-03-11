@@ -5,10 +5,13 @@ import RenterBookings from '../../components/RenterBookings';
 import { useAuthStore } from '../../store/useAuthStore';
 
 import { Box } from '@/components/ui/box';
+import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
 
 export default function BookingsSwitcher() {
   const { profile } = useAuthStore();
   const isOwner = profile?.role === 'car_owner';
+
+  useBookingsRealtime();
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-black">

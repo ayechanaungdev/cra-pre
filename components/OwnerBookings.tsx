@@ -1,7 +1,8 @@
-﻿import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
-import { Database } from '../types/database.types';
+import { useBookingsQuery } from '@/hooks/queries/useBookingsQuery';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Badge, BadgeText } from '@/components/ui/badge';
 import { Box } from '@/components/ui/box';
@@ -15,54 +16,14 @@ import { ScrollView } from '@/components/ui/scroll-view';
 import { Text } from '@/components/ui/text';
 import { Toast, ToastDescription, ToastTitle, useToast } from '@/components/ui/toast';
 import { VStack } from '@/components/ui/vstack';
-
-type Booking = Database['public']['Tables']['bookings']['Row'] & {
-  cars: { brand: string, model: string, owner_id: string };
-  profiles: { full_name: string };
-};
+import { Spinner } from '@/components/ui/spinner';
 
 export default function OwnerBookings() {
   const { profile } = useAuthStore();
   const toast = useToast();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-
-  useEffect(() => {
-    if (profile) {
-      fetchOwnerBookings();
-
-      // Subscribe to real-time changes on the bookings table
-      const channel = supabase
-        .channel('owner_bookings_realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Listen for INSERT, UPDATE, DELETE
-            schema: 'public',
-            table: 'bookings',
-          },
-          (payload) => {
-            console.log('Realtime change received:', payload);
-            fetchOwnerBookings(); // Refresh the list
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [profile]);
-
-  const fetchOwnerBookings = async () => {
-    if (!profile) return;
-    const { data, error } = await (supabase
-      .from('bookings') as any)
-      .select('*, cars!inner(brand, model, owner_id), profiles:customer_id(full_name)')
-      .eq('cars.owner_id', profile.id)
-      .order('created_at', { ascending: false });
-
-    if (data) setBookings(data as any);
-  };
+  const queryClient = useQueryClient();
+  
+  const { data: bookings = [], isLoading, isError } = useBookingsQuery(profile?.id, 'car_owner');
 
   const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
     const { error } = await (supabase
@@ -100,9 +61,25 @@ export default function OwnerBookings() {
           );
         }
       });
-      fetchOwnerBookings();
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
     }
   };
+
+  if (isLoading) {
+    return (
+      <Center className="flex-1">
+        <Spinner size="large" />
+      </Center>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Center className="flex-1">
+        <Text className="text-error-500">Failed to load bookings.</Text>
+      </Center>
+    );
+  }
 
   return (
     <Box className="flex-1">
@@ -116,8 +93,8 @@ export default function OwnerBookings() {
                 <VStack space="sm">
                   <HStack className="justify-between items-center">
                     <VStack>
-                      <Heading size="sm">{booking.cars.brand} {booking.cars.model}</Heading>
-                      <Text size="xs" className="text-typography-500">Customer: {booking.profiles?.full_name}</Text>
+                      <Heading size="sm">{booking.car?.brand} {booking.car?.model}</Heading>
+                      <Text size="xs" className="text-typography-500">Customer: {booking.profiles?.full_name || 'Unknown'}</Text>
                     </VStack>
                     <Badge action={booking.status === 'pending' ? 'warning' : booking.status === 'approved' ? 'success' : 'error'}>
                       <BadgeText>{booking.status.toUpperCase()}</BadgeText>

@@ -1,8 +1,8 @@
-﻿import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../store/useAuthStore';
-import { Database } from '../../types/database.types';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useOwnerCarsQuery } from '@/hooks/queries/useOwnerCarsQuery';
+import { useCarsRealtime } from '@/hooks/useCarsRealtime';
 
 import { Badge, BadgeText } from '@/components/ui/badge';
 import { Box } from '@/components/ui/box';
@@ -15,31 +15,17 @@ import { Image } from '@/components/ui/image';
 import { ScrollView } from '@/components/ui/scroll-view';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
+import { Spinner } from '@/components/ui/spinner';
 import { Plus } from 'lucide-react-native';
-
-type Car = Database['public']['Tables']['cars']['Row'] & {
-  car_images: { image_url: string }[];
-};
 
 export default function OwnerCarsScreen() {
   const router = useRouter();
   const { profile } = useAuthStore();
-  const [cars, setCars] = useState<Car[]>([]);
+  
+  const { data: cars = [], isLoading, isError } = useOwnerCarsQuery(profile?.id);
 
-  useEffect(() => {
-    if (profile) {
-      fetchCars();
-    }
-  }, [profile]);
-
-  const fetchCars = async () => {
-    const { data, error } = await supabase
-      .from('cars')
-      .select('*, car_images(image_url)')
-      .eq('owner_id', profile!.id);
-    
-    if (data) setCars(data as any);
-  };
+  // Subscribe to real-time changes
+  useCarsRealtime();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -50,6 +36,32 @@ export default function OwnerCarsScreen() {
       default: return 'muted';
     }
   };
+
+  if (isLoading) {
+    return (
+      <Box className="flex-1 bg-white dark:bg-black p-4">
+        <HStack className="justify-between items-center mt-4">
+          <Heading size="xl">My Fleet</Heading>
+        </HStack>
+        <Center className="flex-1">
+          <Spinner size="large" />
+        </Center>
+      </Box>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Box className="flex-1 bg-white dark:bg-black p-4">
+        <HStack className="justify-between items-center mt-4">
+          <Heading size="xl">My Fleet</Heading>
+        </HStack>
+        <Center className="flex-1">
+          <Text className="text-error-500">Failed to load cars.</Text>
+        </Center>
+      </Box>
+    );
+  }
 
   return (
     <Box className="flex-1 bg-white dark:bg-black">

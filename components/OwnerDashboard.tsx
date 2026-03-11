@@ -1,8 +1,10 @@
 import { useAuthStore } from '@/store/useAuthStore';
 import { useRouter } from 'expo-router';
 import { Car, Clock, DollarSign, Star } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pressable } from 'react-native';
+
+import { useOwnerStatsQuery } from '@/hooks/queries/useOwnerStatsQuery';
 
 import { Card } from '@/components/ui/card';
 import { Divider } from '@/components/ui/divider';
@@ -12,32 +14,28 @@ import { Icon } from '@/components/ui/icon';
 import { ScrollView } from '@/components/ui/scroll-view';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
+import { Center } from '@/components/ui/center';
+import { Spinner } from '@/components/ui/spinner';
+import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
+import { useCarsRealtime } from '@/hooks/useCarsRealtime';
 
 export default function OwnerDashboard() {
   const router = useRouter();
   const { profile } = useAuthStore();
-  const [stats, setStats] = useState({
-    totalEarnings: 0,
-    activeCars: 0,
-    pendingBookings: 0,
-    averageRating: 0
-  });
+  
+  const { data: stats, isLoading } = useOwnerStatsQuery(profile?.id);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  // Subscribe to changes to ensure dashboard metrics are always live
+  useBookingsRealtime();
+  useCarsRealtime();
 
-  const fetchStats = async () => {
-    if (!profile) return;
-    
-    // In a real app, you'd aggregate these from bookings and reviews
-    setStats({
-      totalEarnings: 1250,
-      activeCars: 3,
-      pendingBookings: 2,
-      averageRating: 4.8
-    });
-  };
+  if (isLoading || !stats) {
+    return (
+      <Center className="flex-1 bg-white dark:bg-black">
+        <Spinner size="large" />
+      </Center>
+    );
+  }
 
   return (
     <ScrollView className="p-4 bg-white dark:bg-black">

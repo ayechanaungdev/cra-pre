@@ -1,9 +1,11 @@
-import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/database.types';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable } from 'react-native';
+
+import { useCarsQuery } from '@/hooks/queries/useCarsQuery';
+import { useCarsRealtime } from '@/hooks/useCarsRealtime';
 
 import { Card } from '@/components/ui/card';
 import { Center } from '@/components/ui/center';
@@ -12,6 +14,7 @@ import { HStack } from '@/components/ui/hstack';
 import { Icon } from '@/components/ui/icon';
 import { Image } from '@/components/ui/image';
 import { Input, InputField, InputIcon } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { ScrollView } from '@/components/ui/scroll-view';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
@@ -22,26 +25,33 @@ type Car = Database['public']['Tables']['cars']['Row'] & {
 
 export default function RenterHome() {
   const router = useRouter();
-  const [cars, setCars] = useState<Car[]>([]);
   const [search, setSearch] = useState('');
+  
+  const { data: cars = [], isLoading, isError } = useCarsQuery();
 
-  useEffect(() => {
-    fetchCars();
-  }, []);
-
-  const fetchCars = async () => {
-    const { data, error } = await (supabase
-      .from('cars') as any)
-      .select('*, car_images(image_url)')
-      .eq('status', 'available');
-    
-    if (data) setCars(data as any);
-  };
+  // Listen to Supabase for changes and automatically refresh the query
+  useCarsRealtime();
 
   const filteredCars = cars.filter(car => 
     car.brand.toLowerCase().includes(search.toLowerCase()) || 
     car.model.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <Center className="flex-1 bg-white dark:bg-black">
+        <Spinner size="large" />
+      </Center>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Center className="flex-1 bg-white dark:bg-black">
+        <Text className="text-error-500">Failed to load cars. Please try again.</Text>
+      </Center>
+    );
+  }
 
   return (
     <VStack space="md" className="p-4 flex-1">

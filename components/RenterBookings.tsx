@@ -1,8 +1,7 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import React from 'react';
 import { useAuthStore } from '../store/useAuthStore';
-import { Database } from '../types/database.types';
+import { useBookingsQuery } from '@/hooks/queries/useBookingsQuery';
 
 import { Badge, BadgeText } from '@/components/ui/badge';
 import { Box } from '@/components/ui/box';
@@ -15,53 +14,13 @@ import { HStack } from '@/components/ui/hstack';
 import { ScrollView } from '@/components/ui/scroll-view';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
-
-type Booking = Database['public']['Tables']['bookings']['Row'] & {
-  cars: { brand: string, model: string, owner_id: string };
-};
+import { Spinner } from '@/components/ui/spinner';
 
 export default function RenterBookings() {
   const router = useRouter();
   const { session } = useAuthStore();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-
-  useEffect(() => {
-    if (session?.user) {
-      fetchBookings();
-
-      // Subscribe to real-time changes on the bookings table for this user
-      const channel = supabase
-        .channel(`renter_bookings_${session.user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE', // Mainly care about status updates from owner
-            schema: 'public',
-            table: 'bookings',
-            filter: `customer_id=eq.${session.user.id}`,
-          },
-          (payload) => {
-            console.log('Booking status change received:', payload);
-            fetchBookings();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [session]);
-
-  const fetchBookings = async () => {
-    const { data, error } = await (supabase
-      .from('bookings') as any)
-      .select('*, cars(brand, model, owner_id)')
-      .eq('customer_id', session!.user.id)
-      .order('created_at', { ascending: false });
-
-    if (data) setBookings(data as any);
-  };
+  
+  const { data: bookings = [], isLoading, isError } = useBookingsQuery(session?.user.id, 'renter');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -84,7 +43,7 @@ export default function RenterBookings() {
               <Card key={booking.id} className="p-4 bg-white dark:bg-background-900 shadow-soft-1" variant="elevated">
                 <VStack space="sm">
                   <HStack className="justify-between items-center">
-                    <Heading size="sm">{booking.cars.brand} {booking.cars.model}</Heading>
+                    <Heading size="sm">{booking.car?.brand} {booking.car?.model}</Heading>
                     <Badge action={getStatusColor(booking.status) as any}>
                       <BadgeText>{booking.status.toUpperCase()}</BadgeText>
                     </Badge>
@@ -105,7 +64,7 @@ export default function RenterBookings() {
                   <Button 
                     variant="link" 
                     size="sm" 
-                    onPress={() => router.push(`/messages/${booking.cars.owner_id}`)}
+                    onPress={() => router.push(`/messages/${booking.car?.owner_id}`)}
                     className="self-start p-0 mt-2"
                   >
                     <ButtonText className="text-primary-600">Contact Owner</ButtonText>
